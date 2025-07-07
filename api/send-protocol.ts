@@ -1,52 +1,78 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
-import nodemailer from 'nodemailer';
+import { VercelRequest, VercelResponse } from '@vercel/node'
+import nodemailer from 'nodemailer'
 
-// Build an SMTP transport from env vars set in the Vercel dashboard
+/* ─────────────────────────  Helpers  ───────────────────────── */
+const CORS = {
+  'Access-Control-Allow-Origin' : '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age'      : '86400'
+}
+
+/* ─────────────────────────  Mailer  ────────────────────────── */
+console.log('🔧 Building SMTP transport...')
 const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST,
-  port: Number(process.env.MAIL_PORT) || 465,
-  secure: true,
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
-  },
-});
+  host   : process.env.MAIL_HOST,
+  port   : Number(process.env.MAIL_PORT) || 465,
+  secure : true,
+  auth   : { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS }
+})
+console.log('✅ Transport ready; will send from', process.env.MAIL_FROM)
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+/* ─────────────────────────  Handler  ───────────────────────── */
+export default async function handler (req: VercelRequest, res: VercelResponse) {
+  /* CORS pre-flight */
+  if (req.method === 'OPTIONS') {
+    console.log('🟡 CORS pre-flight received')
+    res.writeHead(200, CORS).end()
+    return
+  }
+
+  /* Block any non-POST after pre-flight */
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method Not Allowed' });
-    return;
+    console.warn('⛔  Method not allowed:', req.method)
+    res.writeHead(405, { ...CORS, 'Content-Type': 'application/json' })
+       .end(JSON.stringify({ error: 'Method Not Allowed' }))
+    return
   }
 
-  const vars = req.body;
+  console.log('📨 Incoming POST at', new Date().toISOString())
 
-  // Very light validation – expand as needed
+  /* Parse JSON body */
+  const vars = req.body
+  console.log('📦 Payload:', vars)
+
   if (!vars?.email || !vars?.name) {
-    res.status(400).json({ error: 'Missing required fields' });
-    return;
+    console.warn('❌ Missing required fields')
+    res.writeHead(400, { ...CORS, 'Content-Type': 'application/json' })
+       .end(JSON.stringify({ error: 'Missing required fields' }))
+    return
   }
 
-  // Substitute the template placeholders with incoming data
-  const text = buildTemplate(vars);
-  const html = `<pre style="font-family: monospace; white-space: pre-wrap;">${text}</pre>`;
+  const text = buildTemplate(vars)
+  const html = `<pre style="font-family: monospace; white-space: pre-wrap;">${text}</pre>`
 
   try {
-    await transporter.sendMail({
-      from: process.env.MAIL_FROM,           // e.g. "Protocol Bot <noreply@example.com>"
-      to: process.env.MAIL_TO || process.env.MAIL_FROM,
+    console.log('🚀 Sending e-mail to', process.env.MAIL_TO || process.env.MAIL_FROM)
+    const info = await transporter.sendMail({
+      from   : process.env.MAIL_FROM,
+      to     : process.env.MAIL_TO || process.env.MAIL_FROM,
       subject: `🔥 New Custom Protocol Request from ${vars.name}`,
-      text,
-      html,
-    });
+      text, html
+    })
+    console.log('✅ Mail sent; messageId:', info.messageId)
 
-    res.status(200).json({ ok: true });
+    res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
+       .end(JSON.stringify({ ok: true }))
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to send email' });
+    console.error('❌ Mail send failed:', err)
+    res.writeHead(500, { ...CORS, 'Content-Type': 'application/json' })
+       .end(JSON.stringify({ error: 'Failed to send email' }))
   }
 }
 
-function buildTemplate(v: any): string {
+/* ────────────────────────  Template  ───────────────────────── */
+function buildTemplate (v: any): string {
   return `A message by ${v.name} has been received. Kindly respond at your earliest convenience.
 👤
 ${v.name}
@@ -90,5 +116,5 @@ Submission Details:
 - Date: ${v.submission_date}
 
 Complete Form Data:
-${v.complete_form_data}`;
+${v.complete_form_data}`
 }
