@@ -15,21 +15,3 @@
     "@types/nodemailer": "^6.4.12"
   }
 }
-
-{
-  "name": "custom-protocol-backend",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vercel dev",
-    "build": "tsc"
-  },
-  "dependencies": {
-    "nodemailer": "^6.9.5"
-  },
-  "devDependencies": {
-    "typescript": "^5.5.0",
-    "@types/nodemailer": "^6.4.12"
-  }
-}
